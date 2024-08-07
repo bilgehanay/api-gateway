@@ -1,0 +1,45 @@
+{
+  "targets": [
+    {
+      "baseUrl": "http://localhost:8081",
+      "endpoints": {
+        "/api/v1/auth": [
+          {
+            "path": "/login",
+            "method": "POST",
+            "description": "User login endpoint"
+          },
+          {
+            "path": "/signup",
+            "method": "POST",
+            "description": "User signup endpoint"
+          }
+        ],
+        "/api/v1/user": [
+          {
+            "path": "/profile",
+            "method": "GET",
+            "description": "User profile page endpoint"
+          }
+        ]
+      }
+    },
+    {
+      "baseUrl": "http://localhost:8082",
+      "endpoints": {
+        "/api/v1/products": [
+          {
+            "path": "/",
+            "method": "GET",
+            "description": "Get products list"
+          },
+          {
+            "path": "/:id",
+            "method": "GET",
+            "description": "Get product details"
+          }
+        ]
+      }
+    }
+  ]
+}

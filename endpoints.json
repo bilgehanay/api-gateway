@@ -2,6 +2,7 @@
   "targets": [
     {
       "baseUrl": "http://localhost:8081",
+      "service": "User-Service",
       "endpoints": {
         "/api/v1/auth": [
           {

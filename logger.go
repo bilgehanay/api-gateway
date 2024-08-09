@@ -58,7 +58,11 @@ func (l *Logger) Close() {
 	l.wg.Wait()
 }
 
-func NewLog(timestamp time.Time, success bool, service, error, endpoint, userIp, request, response string, status int) Log {
+func NewLog(timestamp time.Time, service, error, endpoint, userIp, request, response string, status int) Log {
+	success := false
+	if status < 400 {
+		success = true
+	}
 	return Log{
 		Timestamp: timestamp,
 		Service:   service,

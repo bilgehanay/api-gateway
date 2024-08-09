@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httputil"
-	"os"
 	"path"
 	"time"
 )
@@ -30,8 +29,7 @@ type ConfigModel struct {
 }
 
 type loggingRoundTripper struct {
-	next   http.RoundTripper
-	logger io.Writer
+	next http.RoundTripper
 }
 
 type retryRoundTripper struct {
@@ -90,8 +88,7 @@ func Router() *http.ServeMux {
 	client := &http.Client{
 		Transport: &retryRoundTripper{
 			next: &loggingRoundTripper{
-				next:   http.DefaultTransport,
-				logger: os.Stdout,
+				next: http.DefaultTransport,
 			},
 			maxRetries: 3,
 			delay:      1 * time.Second,

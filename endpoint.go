@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -28,6 +30,10 @@ type ConfigModel struct {
 	Targets []Target `json:"targets"`
 }
 
+type authRoundTripper struct {
+	next http.RoundTripper
+}
+
 type loggingRoundTripper struct {
 	next http.RoundTripper
 }
@@ -36,6 +42,40 @@ type retryRoundTripper struct {
 	next       http.RoundTripper
 	maxRetries int
 	delay      time.Duration
+}
+
+func (a authRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	token := r.Header.Get("Authorization")
+
+	if token == "" || !ValidateJWT(token) {
+		fmt.Println("Token invalid dönüyor")
+		return nil, errors.New("invalid token")
+	}
+	fmt.Println("Token valid")
+	return a.next.RoundTrip(r)
+}
+
+func ValidateJWT(t string) bool {
+	jwtSecret := []byte("b0272461f7855e2f088cf50221886bb7e894569baf143144f28b81119c5ba809")
+
+	token, err := jwt.Parse(t, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		return false
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if exp, ok := claims["exp"].(float64); ok {
+			if time.Unix(int64(exp), 0).Before(time.Now()) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (rr retryRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -86,12 +126,14 @@ func Router() *http.ServeMux {
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
-		Transport: &retryRoundTripper{
+		Transport: &authRoundTripper{
 			next: &loggingRoundTripper{
-				next: http.DefaultTransport,
+				next: &retryRoundTripper{
+					next:       http.DefaultTransport,
+					maxRetries: 3,
+					delay:      1 * time.Second,
+				},
 			},
-			maxRetries: 3,
-			delay:      1 * time.Second,
 		},
 		Timeout: 10 * time.Second,
 		Jar:     jar,

@@ -11,9 +11,10 @@ import (
 )
 
 type Endpoint struct {
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	Description string `json:"description"`
+	Path          string `json:"path"`
+	Method        string `json:"method"`
+	Description   string `json:"description"`
+	TokenRequired bool   `json:"tokenRequired"`
 }
 
 type ServiceEndpoints map[string][]Endpoint
@@ -32,7 +33,7 @@ func Router() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	jar, _ := cookiejar.New(nil)
-	client := &http.Client{
+	jwtClient := &http.Client{
 		Transport: newRateLimitRoundTripper(
 			&authRoundTripper{
 				next: &loggingRoundTripper{
@@ -50,11 +51,31 @@ func Router() *http.ServeMux {
 		Jar:     jar,
 	}
 
+	client := &http.Client{
+		Transport: newRateLimitRoundTripper(
+			&loggingRoundTripper{
+				next: &retryRoundTripper{
+					next:       http.DefaultTransport,
+					maxRetries: 3,
+					delay:      1 * time.Second,
+				},
+			},
+			10,
+			20,
+		),
+		Timeout: 10 * time.Second,
+		Jar:     jar,
+	}
+
 	for _, t := range config.Targets {
 		for bp, eps := range t.Endpoints {
 			for _, ep := range eps {
 				fullPath := t.BaseURL + path.Join(bp, ep.Path)
-				handler := proxy(fullPath, ep.Method, client)
+				var handler http.Handler
+				if ep.TokenRequired {
+					handler = proxy(fullPath, ep.Method, jwtClient)
+				}
+				handler = proxy(fullPath, ep.Method, client)
 				fmt.Printf("Setting up route: %s %s -> %s\n", ep.Method, ep.Path, fullPath)
 				mux.Handle(ep.Path, handler)
 			}

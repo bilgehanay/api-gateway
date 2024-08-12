@@ -8,19 +8,22 @@
           {
             "path": "/login",
             "method": "POST",
-            "description": "User login endpoint"
+            "description": "User login endpoint",
+            "tokenRequired": false
           },
           {
             "path": "/signup",
             "method": "POST",
-            "description": "User signup endpoint"
+            "description": "User signup endpoint",
+            "tokenRequired": false
           }
         ],
         "/api/v1/user": [
           {
             "path": "/profile",
             "method": "GET",
-            "description": "User profile page endpoint"
+            "description": "User profile page endpoint",
+            "tokenRequired": true
           }
         ]
       }
@@ -32,12 +35,14 @@
           {
             "path": "/",
             "method": "GET",
-            "description": "Get products list"
+            "description": "Get products list",
+            "tokenRequired": true
           },
           {
             "path": "/:id",
             "method": "GET",
-            "description": "Get product details"
+            "description": "Get product details",
+            "tokenRequired": true
           }
         ]
       }

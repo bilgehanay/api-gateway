@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/time/rate"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -44,7 +45,24 @@ type retryRoundTripper struct {
 	delay      time.Duration
 }
 
-func (a authRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+type rateLimitRoundTripper struct {
+	next    http.RoundTripper
+	limiter *rate.Limiter
+}
+
+func newRateLimitRoundTripper(next http.RoundTripper, rps, burst int) *rateLimitRoundTripper {
+	limiter := rate.NewLimiter(rate.Limit(rps), burst)
+	return &rateLimitRoundTripper{next: next, limiter: limiter}
+}
+
+func (rl *rateLimitRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err := rl.limiter.Wait(r.Context()); err != nil {
+		return nil, err
+	}
+	return rl.next.RoundTrip(r)
+}
+
+func (a *authRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	token := r.Header.Get("Authorization")
 
 	if token == "" || !ValidateJWT(token) {
@@ -78,7 +96,7 @@ func ValidateJWT(t string) bool {
 	return true
 }
 
-func (rr retryRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+func (rr *retryRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	var attempts int
 	for {
 		res, err := rr.next.RoundTrip(r)
@@ -100,7 +118,7 @@ func (rr retryRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 }
 
-func (l loggingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+func (l *loggingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	dumpReq, err := httputil.DumpRequest(r, true)
 	if err != nil {
 		fmt.Println("Request dump error:", err)
@@ -126,15 +144,19 @@ func Router() *http.ServeMux {
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
-		Transport: &authRoundTripper{
-			next: &loggingRoundTripper{
-				next: &retryRoundTripper{
-					next:       http.DefaultTransport,
-					maxRetries: 3,
-					delay:      1 * time.Second,
+		Transport: newRateLimitRoundTripper(
+			&authRoundTripper{
+				next: &loggingRoundTripper{
+					next: &retryRoundTripper{
+						next:       http.DefaultTransport,
+						maxRetries: 3,
+						delay:      1 * time.Second,
+					},
 				},
 			},
-		},
+			10,
+			20,
+		),
 		Timeout: 10 * time.Second,
 		Jar:     jar,
 	}
